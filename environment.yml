@@ -1,0 +1,10 @@
+name: diamond-standard
+channels:
+- conda-forge
+dependencies:
+- pip
+- python=3.8
+- pip:
+  - tox
+  - cairo-lang
+  - cairo-nile
