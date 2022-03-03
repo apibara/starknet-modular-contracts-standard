@@ -158,9 +158,29 @@ async def test_it_works(starknet_factory: StarknetFactory):
 
     assert exec_info.retdata == [42]
 
+    await _remove_under_over_facet(starknet, under_over, bob_diamond)
+
+    with pytest.raises(StarkException):
+        await starknet.invoke_raw(
+            contract_address=bob_diamond.contract_address,
+            selector='getReference',
+            calldata=[],
+            caller_address=ALICE,
+        )
+
 
 async def _add_under_over_facet(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract):
-    # add under_over facet to contract
+    # add: action = 0
+    await _update_under_over_facet(starknet, under_over, contract, 0)
+
+
+async def _remove_under_over_facet(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract):
+    # remove: action = 2
+    await _update_under_over_facet(starknet, under_over, contract, 2)
+
+
+async def _update_under_over_facet(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract, action: int):
+    # modify under_over facet to contract
     #
     # I'm not familiar with the api to convert from rich types down
     # to felt so I'm doing this manually
@@ -168,15 +188,15 @@ async def _add_under_over_facet(starknet: StarknetState, under_over: StarknetCon
     calldata = [
         # Adding 3 functions
         3,
-        # FacetCut(address, action, selector), action == 0 is add
+        # FacetCut(address, action, selector)
         under_over.contract_address,
-        0,
+        action,
         get_selector_from_name('setReference'),
         under_over.contract_address,
-        0,
+        action,
         get_selector_from_name('getReference'),
         under_over.contract_address,
-        0,
+        action,
         get_selector_from_name('underOver'),
         # no initialization call
         0,

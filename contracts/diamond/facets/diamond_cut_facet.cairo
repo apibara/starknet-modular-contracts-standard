@@ -94,7 +94,7 @@ func _add_replace_remove_facet_selectors{
         tempvar range_check_ptr = range_check_ptr
     end
 
-    if facet.action == FACET_CUT_REPLACE:
+    if facet.action == FACET_CUT_REMOVE:
         # Zero data for the given selector
         _facets.write(facet.selector, 0)
         tempvar syscall_ptr : felt* = syscall_ptr
