@@ -1,19 +1,25 @@
 %lang starknet
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.cairo.common.math import assert_not_zero
+from starkware.cairo.common.math import assert_not_zero, assert_not_equal
 
 from smc.interfaces.module_registry import (
-    ModuleFunctionAction,
-    ModuleFunctionChange,
-    MODULE_FUNCTION_ADD,
-    MODULE_FUNCTION_REPLACE,
-    MODULE_FUNCTION_REMOVE
-)
+    ModuleFunctionAction, ModuleFunctionChange, MODULE_FUNCTION_ADD, MODULE_FUNCTION_REPLACE,
+    MODULE_FUNCTION_REMOVE)
 
 # Map function selectors to the modules that execute the function.
 @storage_var
 func _module_registry_modules(selector : felt) -> (module_address : felt):
+end
+
+# List of all selectors
+@storage_var
+func _module_registry_selectors(index : felt) -> (selector : felt):
+end
+
+# Length of _module_registry_selectors
+@storage_var
+func _module_registry_selectors_len() -> (len : felt):
 end
 
 # Module registry owner
@@ -23,6 +29,12 @@ end
 
 # get_selector_from_name('changeModules')
 const CHANGE_MODULES_SELECTOR = 1808683055422503325942160754016371337440997851558534157930265361990569747463
+
+# ---------------------------------------------------------------------------- #
+#                                                                              #
+#                    IModuleRegistry interface                                 #
+#                                                                              #
+# ---------------------------------------------------------------------------- #
 
 @external
 func changeModules{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
@@ -39,6 +51,12 @@ func changeModules{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check
     return ()
 end
 
+# ---------------------------------------------------------------------------- #
+#                                                                              #
+#                           Manage Ownership                                   #
+#                                                                              #
+# ---------------------------------------------------------------------------- #
+
 func module_registry_set_owner{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
         owner : felt):
     # checks: if the owner is zero everyone is an owner.
@@ -50,8 +68,15 @@ func module_registry_set_owner{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*,
     return ()
 end
 
+# ---------------------------------------------------------------------------- #
+#                                                                              #
+#                          Manage Module Functions                             #
+#                                                                              #
+# ---------------------------------------------------------------------------- #
+
 func module_registry_get_module_address{
-        syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(selector : felt) -> (address : felt):
+        syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(selector : felt) -> (
+        address : felt):
     let (address) = _module_registry_modules.read(selector)
     return (address=address)
 end
@@ -66,8 +91,7 @@ func module_registry_change_modules{
     return ()
 end
 
-func _change_modules_loop{
-        syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+func _change_modules_loop{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
         actions_len : felt, actions : ModuleFunctionAction*):
     if actions_len == 0:
         return ()
@@ -76,8 +100,7 @@ func _change_modules_loop{
     let module_action : ModuleFunctionAction = [actions]
 
     if module_action.action == MODULE_FUNCTION_ADD:
-        # TODO: check selector does not exist already
-        _module_registry_modules.write(module_action.selector, module_action.module_address)
+        _add_registry_module(module_action.selector, module_action.module_address)
         tempvar syscall_ptr : felt* = syscall_ptr
         tempvar pedersen_ptr : HashBuiltin* = pedersen_ptr
         tempvar range_check_ptr = range_check_ptr
@@ -88,8 +111,7 @@ func _change_modules_loop{
     end
 
     if module_action.action == MODULE_FUNCTION_REPLACE:
-        # TODO: no need to check if already exists?
-        _module_registry_modules.write(module_action.selector, module_action.module_address)
+        _replace_registry_module(module_action.selector, module_action.module_address)
         tempvar syscall_ptr : felt* = syscall_ptr
         tempvar pedersen_ptr : HashBuiltin* = pedersen_ptr
         tempvar range_check_ptr = range_check_ptr
@@ -100,8 +122,7 @@ func _change_modules_loop{
     end
 
     if module_action.action == MODULE_FUNCTION_REMOVE:
-        # Zero data for the given selector
-        _module_registry_modules.write(module_action.selector, 0)
+        _remove_registry_module(module_action.selector, module_action.module_address)
         tempvar syscall_ptr : felt* = syscall_ptr
         tempvar pedersen_ptr : HashBuiltin* = pedersen_ptr
         tempvar range_check_ptr = range_check_ptr
@@ -112,4 +133,82 @@ func _change_modules_loop{
     end
 
     return _change_modules_loop(actions_len - 1, actions + ModuleFunctionAction.SIZE)
+end
+
+func _add_registry_module{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+        selector : felt, module_address : felt):
+    # checks: selector is not already registered
+    let (existing_module_address) = _module_registry_modules.read(selector)
+    with_attr error_message("selector already exists"):
+        assert existing_module_address = 0
+    end
+
+    # effects: add selector to module list
+    _module_registry_modules.write(selector, module_address)
+
+    # effects: update list of selectors
+    let (selectors_len) = _module_registry_selectors_len.read()
+    _module_registry_selectors_len.write(selectors_len + 1)
+    _module_registry_selectors.write(selectors_len, selector)
+
+    return ()
+end
+
+func _replace_registry_module{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+        selector : felt, module_address : felt):
+    # checks: selector is registered
+    let (existing_module_address) = _module_registry_modules.read(selector)
+    with_attr error_message("selector does not exists"):
+        assert_not_zero(existing_module_address)
+    end
+
+    # effects: add selector to module list
+    _module_registry_modules.write(selector, module_address)
+
+    return ()
+end
+
+func _remove_registry_module{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+        selector : felt, module_address : felt):
+    alloc_locals
+
+    # checks: selector is registered
+    let (existing_module_address) = _module_registry_modules.read(selector)
+    with_attr error_message("selector does not exists"):
+        assert_not_zero(existing_module_address)
+    end
+
+    # effects: remove selector from module list
+    _module_registry_modules.write(selector, 0)
+
+    # effects: update list of selectors
+    # fill the hole left by this selector by moving the last selector to it
+    let (local selectors_len) = _module_registry_selectors_len.read()
+
+    let (selector_index) = _find_selector_index_loop(selector, selectors_len, 0)
+    # checks: selector found
+    assert_not_equal(selector_index, selectors_len)
+
+    # notice: selectors length is > 1
+    let (last_selector) = _module_registry_selectors.read(selectors_len - 1)
+
+    _module_registry_selectors.write(selector_index, last_selector)
+    _module_registry_selectors_len.write(selectors_len - 1)
+
+    return ()
+end
+
+func _find_selector_index_loop{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+        selector : felt, selectors_len : felt, current_index : felt) -> (index : felt):
+    if current_index == selectors_len:
+        return (index=selectors_len)
+    end
+
+    let (current_selector) = _module_registry_selectors.read(current_index)
+
+    if current_selector == selector:
+        return (index=current_index)
+    else:
+        return _find_selector_index_loop(selector, selectors_len, current_index + 1)
+    end
 end

@@ -8,19 +8,22 @@ func _reference() -> (reference : felt):
 end
 
 @external
-func setReference{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(reference : felt) -> ():
+func setReference{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+        reference : felt) -> ():
     _reference.write(reference)
     return ()
 end
 
 @view
-func getReference{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}() -> (reference : felt):
+func getReference{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}() -> (
+        reference : felt):
     let (reference) = _reference.read()
     return (reference=reference)
 end
 
 @view
-func underOver{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(n : felt) -> (is_over : felt):
+func underOver{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(n : felt) -> (
+        is_over : felt):
     alloc_locals
     let (reference) = _reference.read()
 

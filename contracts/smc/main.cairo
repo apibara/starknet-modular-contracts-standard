@@ -7,11 +7,8 @@ from starkware.starknet.common.syscalls import delegate_call
 
 from smc.interfaces.module_registry import ModuleFunctionAction, MODULE_FUNCTION_ADD
 from smc.modules.module_registry import (
-    module_registry_set_owner,
-    module_registry_change_modules,
-    module_registry_get_module_address,
-    CHANGE_MODULES_SELECTOR
-)
+    module_registry_set_owner, module_registry_change_modules, module_registry_get_module_address,
+    CHANGE_MODULES_SELECTOR)
 
 @constructor
 func constructor{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
@@ -37,15 +34,11 @@ func constructor{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_p
     return ()
 end
 
-
 @external
 @raw_input
 @raw_output
-func __default__{
-        syscall_ptr : felt*, pedersen_ptr : HashBuiltin*,
-        range_check_ptr}(
-        selector : felt, calldata_size : felt,
-        calldata : felt*) -> (
+func __default__{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+        selector : felt, calldata_size : felt, calldata : felt*) -> (
         retdata_size : felt, retdata : felt*):
     let (address) = module_registry_get_module_address(selector)
 

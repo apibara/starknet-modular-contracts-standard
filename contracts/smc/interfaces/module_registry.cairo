@@ -10,6 +10,14 @@ struct ModuleFunctionAction:
     member selector : felt
 end
 
+@contract_interface
+namespace IModuleRegistry:
+    func changeModules(
+            actions_len : felt, actions : ModuleFunctionAction*, address : felt,
+            calldata_len : felt, calldata : felt*):
+    end
+end
+
 @event
 func ModuleFunctionChange(
         actions_len : felt, actions : ModuleFunctionAction*, address : felt, calldata_len : felt,
