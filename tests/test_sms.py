@@ -1,6 +1,6 @@
 import pytest
 import pytest_asyncio
-from conftest import ALICE, BOB, StarknetFactory, compile_diamond_contract
+from conftest import ALICE, BOB, StarknetFactory, compile_smc_contract
 from starkware.starknet.testing.contract import StarknetContract
 from starkware.starknet.testing.state import StarknetState
 from starkware.starknet.public.abi import get_selector_from_name
@@ -11,79 +11,80 @@ from starkware.starkware_utils.error_handling import StarkException
 async def starknet_factory():
     starknet = await StarknetState.empty()
 
-    diamond_cut_facet_def = compile_diamond_contract('diamond/facets/diamond_cut_facet')
-    diamond_cut_addr, diamond_cut_exec_info = await starknet.deploy(
-        contract_definition=diamond_cut_facet_def,
+    module_registry_def = compile_smc_contract('smc/modules/module_registry')
+    module_registry_addr, module_registry_exec_info = await starknet.deploy(
+        contract_definition=module_registry_def,
         constructor_calldata=[],
     )
 
-    diamond_def = compile_diamond_contract('diamond/diamond')
-    alice_diamond_addr, alice_diamond_exec_info = await starknet.deploy(
-        contract_definition=diamond_def,
-        constructor_calldata=[ALICE, diamond_cut_addr],
+    smc_main_def = compile_smc_contract('smc/main')
+
+    alice_main_addr, alice_main_exec_info = await starknet.deploy(
+        contract_definition=smc_main_def,
+        constructor_calldata=[ALICE, module_registry_addr],
     )
-    bob_diamond_addr, bob_diamond_exec_info = await starknet.deploy(
-        contract_definition=diamond_def,
-        constructor_calldata=[BOB, diamond_cut_addr],
+    bob_main_addr, bob_main_exec_info = await starknet.deploy(
+        contract_definition=smc_main_def,
+        constructor_calldata=[BOB, module_registry_addr],
     )
 
-    under_over_facet_def = compile_diamond_contract('facets/under_over')
-    under_over_facet_addr, under_over_facet_exec_info = await starknet.deploy(
-        contract_definition=under_over_facet_def,
+    under_over_module_def = compile_smc_contract('modules/under_over')
+    under_over_module_addr, under_over_module_exec_info = await starknet.deploy(
+        contract_definition=under_over_module_def,
         constructor_calldata=[],
     )
 
     def _f():
         state = starknet.copy()
-        diamond_cut = StarknetContract(
+        module_registry = StarknetContract(
             state=state,
-            abi=diamond_cut_facet_def.abi,
-            contract_address=diamond_cut_addr,
-            deploy_execution_info=diamond_cut_exec_info,
+            abi=module_registry_def.abi,
+            contract_address=module_registry_addr,
+            deploy_execution_info=module_registry_exec_info,
         )
 
-        alice_diamond = StarknetContract(
+        alice_main = StarknetContract(
             state=state,
-            abi=diamond_def.abi,
-            contract_address=alice_diamond_addr,
-            deploy_execution_info=alice_diamond_exec_info,
+            abi=smc_main_def.abi,
+            contract_address=alice_main_addr,
+            deploy_execution_info=alice_main_exec_info,
         )
 
-        bob_diamond = StarknetContract(
+        bob_main = StarknetContract(
             state=state,
-            abi=diamond_def.abi,
-            contract_address=bob_diamond_addr,
-            deploy_execution_info=bob_diamond_exec_info,
+            abi=smc_main_def.abi,
+            contract_address=bob_main_addr,
+            deploy_execution_info=bob_main_exec_info,
         )
 
         under_over = StarknetContract(
             state=state,
-            abi=under_over_facet_def.abi,
-            contract_address=under_over_facet_addr,
-            deploy_execution_info=under_over_facet_exec_info,
+            abi=under_over_module_def.abi,
+            contract_address=under_over_module_addr,
+            deploy_execution_info=under_over_module_exec_info,
         )
 
-        return state, [alice_diamond, bob_diamond, diamond_cut, under_over]
+        return state, [alice_main, bob_main, module_registry, under_over]
 
     return _f
 
 
 @pytest.mark.asyncio
 async def test_it_works(starknet_factory: StarknetFactory):
-    starknet, [alice_diamond, bob_diamond, _diamond_cut, under_over] = starknet_factory()
+    starknet, [alice_main, bob_main, _module_registry, under_over] = starknet_factory()
 
     with pytest.raises(StarkException):
         await starknet.invoke_raw(
-            contract_address=alice_diamond.contract_address,
+            contract_address=alice_main.contract_address,
             selector='getReference',
             calldata=[],
             caller_address=ALICE,
         )
     
-    await _add_under_over_facet(starknet, under_over, alice_diamond)
+    await _add_under_over_module(starknet, under_over, alice_main)
 
     exec_info = await starknet.invoke_raw(
-        contract_address=alice_diamond.contract_address,
+        contract_address=alice_main.contract_address,
         selector='getReference',
         calldata=[],
         caller_address=ALICE,
@@ -94,14 +95,14 @@ async def test_it_works(starknet_factory: StarknetFactory):
 
     # update number
     await starknet.invoke_raw(
-        contract_address=alice_diamond.contract_address,
+        contract_address=alice_main.contract_address,
         selector='setReference',
         calldata=[42],
         caller_address=ALICE,
     )
 
     exec_info = await starknet.invoke_raw(
-        contract_address=alice_diamond.contract_address,
+        contract_address=alice_main.contract_address,
         selector='getReference',
         calldata=[],
         caller_address=ALICE,
@@ -112,16 +113,16 @@ async def test_it_works(starknet_factory: StarknetFactory):
     # double check bob's contract is untouched
     with pytest.raises(StarkException):
         await starknet.invoke_raw(
-            contract_address=bob_diamond.contract_address,
+            contract_address=bob_main.contract_address,
             selector='getReference',
             calldata=[],
             caller_address=ALICE,
         )
 
-    await _add_under_over_facet(starknet, under_over, bob_diamond)
+    await _add_under_over_module(starknet, under_over, bob_main)
 
     exec_info = await starknet.invoke_raw(
-        contract_address=bob_diamond.contract_address,
+        contract_address=bob_main.contract_address,
         selector='getReference',
         calldata=[],
         caller_address=ALICE,
@@ -132,14 +133,14 @@ async def test_it_works(starknet_factory: StarknetFactory):
 
     # update number
     await starknet.invoke_raw(
-        contract_address=bob_diamond.contract_address,
+        contract_address=bob_main.contract_address,
         selector='setReference',
         calldata=[313],
         caller_address=ALICE,
     )
 
     exec_info = await starknet.invoke_raw(
-        contract_address=bob_diamond.contract_address,
+        contract_address=bob_main.contract_address,
         selector='getReference',
         calldata=[],
         caller_address=ALICE,
@@ -150,7 +151,7 @@ async def test_it_works(starknet_factory: StarknetFactory):
 
     # double check alice's contract was not touched
     exec_info = await starknet.invoke_raw(
-        contract_address=alice_diamond.contract_address,
+        contract_address=alice_main.contract_address,
         selector='getReference',
         calldata=[],
         caller_address=ALICE,
@@ -158,29 +159,29 @@ async def test_it_works(starknet_factory: StarknetFactory):
 
     assert exec_info.retdata == [42]
 
-    await _remove_under_over_facet(starknet, under_over, bob_diamond)
+    await _remove_under_over_module(starknet, under_over, bob_main)
 
     with pytest.raises(StarkException):
         await starknet.invoke_raw(
-            contract_address=bob_diamond.contract_address,
+            contract_address=bob_main.contract_address,
             selector='getReference',
             calldata=[],
             caller_address=ALICE,
         )
 
 
-async def _add_under_over_facet(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract):
+async def _add_under_over_module(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract):
     # add: action = 0
-    await _update_under_over_facet(starknet, under_over, contract, 0)
+    await _update_under_over_module(starknet, under_over, contract, 0)
 
 
-async def _remove_under_over_facet(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract):
+async def _remove_under_over_module(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract):
     # remove: action = 2
-    await _update_under_over_facet(starknet, under_over, contract, 2)
+    await _update_under_over_module(starknet, under_over, contract, 2)
 
 
-async def _update_under_over_facet(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract, action: int):
-    # modify under_over facet to contract
+async def _update_under_over_module(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract, action: int):
+    # add/remove under over module from contract
     #
     # I'm not familiar with the api to convert from rich types down
     # to felt so I'm doing this manually
@@ -188,7 +189,7 @@ async def _update_under_over_facet(starknet: StarknetState, under_over: Starknet
     calldata = [
         # Adding 3 functions
         3,
-        # FacetCut(address, action, selector)
+        # ModuleFunctionAction(address, action, selector)
         under_over.contract_address,
         action,
         get_selector_from_name('setReference'),
@@ -205,7 +206,7 @@ async def _update_under_over_facet(starknet: StarknetState, under_over: Starknet
 
     exec_info = await starknet.invoke_raw(
         contract_address=contract.contract_address,
-        selector='diamondCut',
+        selector='changeModules',
         calldata=calldata,
         caller_address=ALICE,
     )

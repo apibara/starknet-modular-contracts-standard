@@ -1,8 +1,7 @@
-# Diamond Standard in Cairo
+# StarkNet Modular Contracts (SMC) Standard
 
-This repository explores the diamond standard in Cairo.
-
-You should probably look at the tests to understand what's going on.
+This repository presents a way to build and deploy modular StarkNet contracts.
+It is heavily inspired by the [Diamond Standard](https://eips.ethereum.org/EIPS/eip-2535), but uses a different naming convention to avoid confusion.
 
 ## Running
 

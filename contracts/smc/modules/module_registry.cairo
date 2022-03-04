@@ -3,76 +3,81 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.math import assert_not_zero
 
-from diamond.interfaces.diamond_cut import (
-    FacetCut, DiamondCut, FACET_CUT_ADD, FACET_CUT_REMOVE, FACET_CUT_REPLACE)
+from smc.interfaces.module_registry import (
+    ModuleFunctionAction,
+    ModuleFunctionChange,
+    MODULE_FUNCTION_ADD,
+    MODULE_FUNCTION_REPLACE,
+    MODULE_FUNCTION_REMOVE
+)
 
-# Map function selectors to the facets that execute the function.
+# Map function selectors to the modules that execute the function.
 @storage_var
-func _facets(selector : felt) -> (facet_address : felt):
+func _module_registry_modules(selector : felt) -> (module_address : felt):
 end
 
-# Diamond owner
+# Module registry owner
 @storage_var
-func _owner() -> (owner : felt):
+func _module_registry_owner() -> (owner : felt):
 end
 
-# get_selector_from_name('diamondCut')
-const DIAMOND_CUT_SELECTOR = 430792745303880346585957116707317276189779144684897836036710359506025130056
+# get_selector_from_name('changeModules')
+const CHANGE_MODULES_SELECTOR = 1808683055422503325942160754016371337440997851558534157930265361990569747463
 
 @external
-func diamondCut{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-        diamond_cut_len : felt, diamond_cut : FacetCut*, address : felt, calldata_len : felt,
+func changeModules{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+        actions_len : felt, actions : ModuleFunctionAction*, address : felt, calldata_len : felt,
         calldata : felt*):
     alloc_locals
 
-    diamond_cut_facet_diamond_cut(diamond_cut_len, diamond_cut, address, calldata_len, calldata)
+    module_registry_change_modules(actions_len, actions, address, calldata_len, calldata)
 
     local pedersen_ptr : HashBuiltin* = pedersen_ptr
 
-    DiamondCut.emit(diamond_cut_len, diamond_cut, address, calldata_len, calldata)
+    ModuleFunctionChange.emit(actions_len, actions, address, calldata_len, calldata)
 
     return ()
 end
 
-func diamond_cut_facet_set_owner{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+func module_registry_set_owner{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
         owner : felt):
     # checks: if the owner is zero everyone is an owner.
     assert_not_zero(owner)
 
     # effects: update owner
-    _owner.write(owner)
+    _module_registry_owner.write(owner)
 
     return ()
 end
 
-func diamond_cut_facet_get_facet_address{
+func module_registry_get_module_address{
         syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(selector : felt) -> (address : felt):
-    let (address) = _facets.read(selector)
+    let (address) = _module_registry_modules.read(selector)
     return (address=address)
 end
 
-func diamond_cut_facet_diamond_cut{
+func module_registry_change_modules{
         syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-        diamond_cut_len : felt, diamond_cut : FacetCut*, address : felt, calldata_len : felt,
+        actions_len : felt, actions : ModuleFunctionAction*, address : felt, calldata_len : felt,
         calldata : felt*):
-    _add_replace_remove_facet_selectors(diamond_cut_len, diamond_cut)
+    _change_modules_loop(actions_len, actions)
 
     # call address _init with calldata
     return ()
 end
 
-func _add_replace_remove_facet_selectors{
+func _change_modules_loop{
         syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-        diamond_cut_len : felt, diamond_cut : FacetCut*):
-    if diamond_cut_len == 0:
+        actions_len : felt, actions : ModuleFunctionAction*):
+    if actions_len == 0:
         return ()
     end
 
-    let facet : FacetCut = [diamond_cut]
+    let module_action : ModuleFunctionAction = [actions]
 
-    if facet.action == FACET_CUT_ADD:
+    if module_action.action == MODULE_FUNCTION_ADD:
         # TODO: check selector does not exist already
-        _facets.write(facet.selector, facet.facet_address)
+        _module_registry_modules.write(module_action.selector, module_action.module_address)
         tempvar syscall_ptr : felt* = syscall_ptr
         tempvar pedersen_ptr : HashBuiltin* = pedersen_ptr
         tempvar range_check_ptr = range_check_ptr
@@ -82,9 +87,9 @@ func _add_replace_remove_facet_selectors{
         tempvar range_check_ptr = range_check_ptr
     end
 
-    if facet.action == FACET_CUT_REPLACE:
+    if module_action.action == MODULE_FUNCTION_REPLACE:
         # TODO: no need to check if already exists?
-        _facets.write(facet.selector, facet.facet_address)
+        _module_registry_modules.write(module_action.selector, module_action.module_address)
         tempvar syscall_ptr : felt* = syscall_ptr
         tempvar pedersen_ptr : HashBuiltin* = pedersen_ptr
         tempvar range_check_ptr = range_check_ptr
@@ -94,9 +99,9 @@ func _add_replace_remove_facet_selectors{
         tempvar range_check_ptr = range_check_ptr
     end
 
-    if facet.action == FACET_CUT_REMOVE:
+    if module_action.action == MODULE_FUNCTION_REMOVE:
         # Zero data for the given selector
-        _facets.write(facet.selector, 0)
+        _module_registry_modules.write(module_action.selector, 0)
         tempvar syscall_ptr : felt* = syscall_ptr
         tempvar pedersen_ptr : HashBuiltin* = pedersen_ptr
         tempvar range_check_ptr = range_check_ptr
@@ -106,5 +111,5 @@ func _add_replace_remove_facet_selectors{
         tempvar range_check_ptr = range_check_ptr
     end
 
-    return _add_replace_remove_facet_selectors(diamond_cut_len - 1, diamond_cut + FacetCut.SIZE)
+    return _change_modules_loop(actions_len - 1, actions + ModuleFunctionAction.SIZE)
 end

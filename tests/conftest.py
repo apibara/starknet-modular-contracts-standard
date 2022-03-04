@@ -26,7 +26,7 @@ def event_loop():
 _root_dir = Path(__file__).parent.parent / 'contracts'
 
 
-def compile_diamond_contract(contract_name):
+def compile_smc_contract(contract_name):
     filename = contract_path(contract_name)
     return compile_starknet_files(
         [filename],
