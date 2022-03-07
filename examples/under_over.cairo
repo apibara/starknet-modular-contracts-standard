@@ -8,6 +8,13 @@ func _reference() -> (reference : felt):
 end
 
 @external
+func initializer{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+        reference : felt) -> ():
+    _reference.write(reference)
+    return ()
+end
+
+@external
 func setReference{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
         reference : felt) -> ():
     _reference.write(reference)

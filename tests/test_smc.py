@@ -134,7 +134,7 @@ async def test_it_works(starknet_factory: StarknetFactory):
             caller_address=ALICE,
         )
 
-    await _add_under_over_module(starknet, under_over, bob_main, caller=BOB)
+    await _add_under_over_module(starknet, under_over, bob_main, caller=BOB, initializer=True)
 
     exec_info = await starknet.invoke_raw(
         contract_address=bob_main.contract_address,
@@ -143,8 +143,9 @@ async def test_it_works(starknet_factory: StarknetFactory):
         caller_address=ALICE,
     )
 
-    # bob's reference number is initialized to 0 by default
-    assert exec_info.retdata == [0]
+    # since we called the initializer, the reference number is initalized
+    # to something else
+    assert exec_info.retdata == [100]
 
     # update number
     await starknet.invoke_raw(
@@ -239,9 +240,9 @@ async def test_ownership(starknet_factory: StarknetFactory):
     await _add_under_over_module(starknet, under_over, alice_main, caller=ALICE)
 
 
-async def _add_under_over_module(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract, caller: Optional[int] = None):
+async def _add_under_over_module(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract, caller: Optional[int] = None, initializer: bool = False):
     # add: action = 0
-    await _update_under_over_module(starknet, under_over, contract, 0, caller)
+    await _update_under_over_module(starknet, under_over, contract, 0, caller, initializer)
 
 
 async def _remove_under_over_module(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract, caller: Optional[int] = None):
@@ -249,12 +250,16 @@ async def _remove_under_over_module(starknet: StarknetState, under_over: Starkne
     await _update_under_over_module(starknet, under_over, contract, 2, caller)
 
 
-async def _update_under_over_module(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract, action: int, caller: Optional[int] = None):
+async def _update_under_over_module(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract, action: int, caller: Optional[int] = None, initializer: bool = False):
     # add/remove under over module from contract
     #
     # I'm not familiar with the api to convert from rich types down
     # to felt so I'm doing this manually
 
+    if initializer:
+        initializer_args = [under_over.contract_address, 1, 100]
+    else:
+        initializer_args = [0, 0]
     calldata = [
         # Adding 3 functions
         3,
@@ -268,10 +273,7 @@ async def _update_under_over_module(starknet: StarknetState, under_over: Starkne
         under_over.contract_address,
         action,
         get_selector_from_name('underOver'),
-        # no initialization call
-        0,
-        0,
-    ]
+    ] + initializer_args
 
     caller = 0 if caller is None else caller
 

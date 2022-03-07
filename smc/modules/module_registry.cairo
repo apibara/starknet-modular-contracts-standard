@@ -2,6 +2,7 @@
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.math import assert_not_zero, assert_not_equal
+from starkware.starknet.common.syscalls import delegate_call
 
 from openzeppelin.access.ownable import Ownable_only_owner
 
@@ -26,6 +27,9 @@ end
 
 # get_selector_from_name('changeModules')
 const CHANGE_MODULES_SELECTOR = 1808683055422503325942160754016371337440997851558534157930265361990569747463
+
+# get_selector_from_name('initializer')
+const INITIALIZER_SELECTOR = 1295919550572838631247819983596733806859788957403169325509326258146877103642
 
 # ---------------------------------------------------------------------------- #
 #                                                                              #
@@ -70,8 +74,20 @@ func module_registry_change_modules{
         calldata : felt*):
     _change_modules_loop(actions_len, actions)
 
-    # call address _init with calldata
-    return ()
+    if address != 0:
+        assert_not_zero(calldata_len)
+
+        let (retdata_size : felt, retdata : felt*) = delegate_call(
+            contract_address=address,
+            function_selector=INITIALIZER_SELECTOR,
+            calldata_size=calldata_len,
+            calldata=calldata)
+
+        assert retdata_size = 0
+        return ()
+    else:
+        return ()
+    end
 end
 
 func _change_modules_loop{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
