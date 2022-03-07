@@ -1,7 +1,7 @@
 from typing import Optional
 import pytest
 import pytest_asyncio
-from conftest import ALICE, BOB, StarknetFactory, compile_smc_contract
+from conftest import ALICE, BOB, StarknetFactory, compile_examples_contract, compile_smc_contract
 from starkware.starknet.testing.contract import StarknetContract
 from starkware.starknet.testing.state import StarknetState
 from starkware.starknet.public.abi import get_selector_from_name
@@ -12,13 +12,13 @@ from starkware.starkware_utils.error_handling import StarkException
 async def starknet_factory():
     starknet = await StarknetState.empty()
 
-    module_registry_def = compile_smc_contract('smc/modules/module_registry')
+    module_registry_def = compile_smc_contract('modules/module_registry')
     module_registry_addr, module_registry_exec_info = await starknet.deploy(
         contract_definition=module_registry_def,
         constructor_calldata=[],
     )
 
-    smc_main_def = compile_smc_contract('smc/main')
+    smc_main_def = compile_smc_contract('main')
 
     alice_main_addr, alice_main_exec_info = await starknet.deploy(
         contract_definition=smc_main_def,
@@ -29,13 +29,13 @@ async def starknet_factory():
         constructor_calldata=[BOB, module_registry_addr],
     )
 
-    under_over_module_def = compile_smc_contract('modules/under_over')
+    under_over_module_def = compile_examples_contract('under_over')
     under_over_module_addr, under_over_module_exec_info = await starknet.deploy(
         contract_definition=under_over_module_def,
         constructor_calldata=[],
     )
 
-    module_introspection_def = compile_smc_contract('smc/modules/module_introspection')
+    module_introspection_def = compile_smc_contract('modules/module_introspection')
     module_introspection_addr, module_introspection_exec_info = await starknet.deploy(
         contract_definition=module_introspection_def,
         constructor_calldata=[]
