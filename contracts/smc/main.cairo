@@ -5,9 +5,11 @@ from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.math import assert_not_zero
 from starkware.starknet.common.syscalls import delegate_call
 
+from openzeppelin.access.ownable import Ownable_initializer
+
 from smc.interfaces.module_registry import ModuleFunctionAction, MODULE_FUNCTION_ADD
 from smc.modules.module_registry import (
-    module_registry_set_owner, module_registry_change_modules, module_registry_get_module_address,
+    module_registry_change_modules, module_registry_get_module_address,
     CHANGE_MODULES_SELECTOR)
 
 @constructor
@@ -16,7 +18,7 @@ func constructor{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_p
     alloc_locals
 
     # effects: set owner of this contract
-    module_registry_set_owner(owner)
+    Ownable_initializer(owner)
 
     local module_action : ModuleFunctionAction
     module_action.action = MODULE_FUNCTION_ADD

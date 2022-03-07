@@ -23,7 +23,8 @@ def event_loop():
 
 
 
-_root_dir = Path(__file__).parent.parent / 'contracts'
+_root_dir = Path(__file__).parent.parent
+_contracts_dir = _root_dir / 'contracts'
 
 
 def compile_smc_contract(contract_name):
@@ -32,11 +33,12 @@ def compile_smc_contract(contract_name):
         [filename],
         debug_info=True,
         cairo_path=[
-            str(_root_dir),
+            str(_contracts_dir),
+            str(_root_dir / 'vendor' / 'cairo-contracts'),
         ],
     )
 
 
 def contract_path(contract_name):
-    return str(_root_dir / f"{contract_name}.cairo")
+    return str(_contracts_dir / f"{contract_name}.cairo")
 

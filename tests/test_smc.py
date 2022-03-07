@@ -1,3 +1,4 @@
+from typing import Optional
 import pytest
 import pytest_asyncio
 from conftest import ALICE, BOB, StarknetFactory, compile_smc_contract
@@ -95,7 +96,7 @@ async def test_it_works(starknet_factory: StarknetFactory):
             caller_address=ALICE,
         )
     
-    await _add_under_over_module(starknet, under_over, alice_main)
+    await _add_under_over_module(starknet, under_over, alice_main, caller=ALICE)
 
     exec_info = await starknet.invoke_raw(
         contract_address=alice_main.contract_address,
@@ -133,7 +134,7 @@ async def test_it_works(starknet_factory: StarknetFactory):
             caller_address=ALICE,
         )
 
-    await _add_under_over_module(starknet, under_over, bob_main)
+    await _add_under_over_module(starknet, under_over, bob_main, caller=BOB)
 
     exec_info = await starknet.invoke_raw(
         contract_address=bob_main.contract_address,
@@ -173,7 +174,7 @@ async def test_it_works(starknet_factory: StarknetFactory):
 
     assert exec_info.retdata == [42]
 
-    await _remove_under_over_module(starknet, under_over, bob_main)
+    await _remove_under_over_module(starknet, under_over, bob_main, caller=BOB)
 
     with pytest.raises(StarkException):
         await starknet.invoke_raw(
@@ -196,7 +197,7 @@ async def test_module_introspection(starknet_factory: StarknetFactory):
             caller_address=ALICE,
         )
 
-    await _add_module_introspection(starknet, module_introspection, alice_main)
+    await _add_module_introspection(starknet, module_introspection, alice_main, caller=ALICE)
 
     exec_info = await starknet.invoke_raw(
         contract_address=alice_main.contract_address,
@@ -228,17 +229,27 @@ async def test_module_introspection(starknet_factory: StarknetFactory):
     assert exec_info.retdata == [module_introspection.contract_address]
 
 
-async def _add_under_over_module(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract):
+@pytest.mark.asyncio
+async def test_ownership(starknet_factory: StarknetFactory):
+    starknet, [alice_main, _bob_main, _module_registry, under_over, _module_introspection] = starknet_factory()
+    
+    with pytest.raises(StarkException):
+        await _add_under_over_module(starknet, under_over, alice_main, caller=BOB)
+
+    await _add_under_over_module(starknet, under_over, alice_main, caller=ALICE)
+
+
+async def _add_under_over_module(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract, caller: Optional[int] = None):
     # add: action = 0
-    await _update_under_over_module(starknet, under_over, contract, 0)
+    await _update_under_over_module(starknet, under_over, contract, 0, caller)
 
 
-async def _remove_under_over_module(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract):
+async def _remove_under_over_module(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract, caller: Optional[int] = None):
     # remove: action = 2
-    await _update_under_over_module(starknet, under_over, contract, 2)
+    await _update_under_over_module(starknet, under_over, contract, 2, caller)
 
 
-async def _update_under_over_module(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract, action: int):
+async def _update_under_over_module(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract, action: int, caller: Optional[int] = None):
     # add/remove under over module from contract
     #
     # I'm not familiar with the api to convert from rich types down
@@ -262,18 +273,20 @@ async def _update_under_over_module(starknet: StarknetState, under_over: Starkne
         0,
     ]
 
+    caller = 0 if caller is None else caller
+
     exec_info = await starknet.invoke_raw(
         contract_address=contract.contract_address,
         selector='changeModules',
         calldata=calldata,
-        caller_address=ALICE,
+        caller_address=caller,
     )
 
     # the event being emitted is a good sign
     assert len(exec_info.call_info.events) == 1
 
 
-async def _add_module_introspection(starknet: StarknetState, module_introspection: StarknetContract, contract: StarknetContract):
+async def _add_module_introspection(starknet: StarknetState, module_introspection: StarknetContract, contract: StarknetContract, caller: Optional[int] = None):
     calldata = [
         # Adding 3 functions
         3,
@@ -292,11 +305,13 @@ async def _add_module_introspection(starknet: StarknetState, module_introspectio
         0,
     ]
 
+    caller = 0 if caller is None else caller
+
     exec_info = await starknet.invoke_raw(
         contract_address=contract.contract_address,
         selector='changeModules',
         calldata=calldata,
-        caller_address=ALICE,
+        caller_address=caller,
     )
 
     # the event being emitted is a good sign

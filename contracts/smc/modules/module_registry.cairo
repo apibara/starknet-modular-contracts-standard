@@ -3,6 +3,8 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.math import assert_not_zero, assert_not_equal
 
+from openzeppelin.access.ownable import Ownable_only_owner
+
 from smc.interfaces.module_registry import (
     ModuleFunctionAction, ModuleFunctionChange, MODULE_FUNCTION_ADD, MODULE_FUNCTION_REPLACE,
     MODULE_FUNCTION_REMOVE)
@@ -22,11 +24,6 @@ end
 func _module_registry_selectors_len() -> (len : felt):
 end
 
-# Module registry owner
-@storage_var
-func _module_registry_owner() -> (owner : felt):
-end
-
 # get_selector_from_name('changeModules')
 const CHANGE_MODULES_SELECTOR = 1808683055422503325942160754016371337440997851558534157930265361990569747463
 
@@ -42,28 +39,14 @@ func changeModules{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check
         calldata : felt*):
     alloc_locals
 
+    # checks: caller is owner
+    Ownable_only_owner()
+
     module_registry_change_modules(actions_len, actions, address, calldata_len, calldata)
 
     local pedersen_ptr : HashBuiltin* = pedersen_ptr
 
     ModuleFunctionChange.emit(actions_len, actions, address, calldata_len, calldata)
-
-    return ()
-end
-
-# ---------------------------------------------------------------------------- #
-#                                                                              #
-#                           Manage Ownership                                   #
-#                                                                              #
-# ---------------------------------------------------------------------------- #
-
-func module_registry_set_owner{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-        owner : felt):
-    # checks: if the owner is zero everyone is an owner.
-    assert_not_zero(owner)
-
-    # effects: update owner
-    _module_registry_owner.write(owner)
 
     return ()
 end

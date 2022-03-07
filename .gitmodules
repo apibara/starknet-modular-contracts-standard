@@ -1,0 +1,3 @@
+[submodule "vendor/cairo-contracts"]
+	path = vendor/cairo-contracts
+	url = https://github.com/OpenZeppelin/cairo-contracts.git
