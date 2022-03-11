@@ -1,12 +1,9 @@
-from typing import List, Any, Optional
+from typing import List, Optional
 from enum import Enum
-from copy import deepcopy
 
 from starkware.starknet.public.abi import get_selector_from_name
-from starkware.starknet.testing.objects import StarknetTransactionExecutionInfo
 from starkware.starknet.testing.contract import StarknetContract
 from starkware.starknet.testing.contract_utils import StructManager, EventManager
-from starkware.starknet.testing.state import CastableToAddress, StarknetState
 
 
 class ModuleAction(Enum):
@@ -37,6 +34,8 @@ class ModularContract(StarknetContract):
     def _change_module(self, module: StarknetContract, action: ModuleAction, initializer_args: Optional[List[int]] = None):
         actions = []
         for func in module._abi_function_mapping.keys():
+            if func == 'initializer':
+                continue
             actions.append((
                 module.contract_address,
                 action.value,
