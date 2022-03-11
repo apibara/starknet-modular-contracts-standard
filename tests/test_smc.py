@@ -1,11 +1,15 @@
 from typing import Optional
+
 import pytest
 import pytest_asyncio
-from conftest import ALICE, BOB, StarknetFactory, compile_examples_contract, compile_smc_contract
 from starkware.starknet.testing.contract import StarknetContract
 from starkware.starknet.testing.state import StarknetState
 from starkware.starknet.public.abi import get_selector_from_name
 from starkware.starkware_utils.error_handling import StarkException
+
+from smc.testing import ModularContract
+
+from conftest import ALICE, BOB, StarknetFactory, compile_examples_contract, compile_smc_contract
 
 
 @pytest_asyncio.fixture(scope='module')
@@ -51,16 +55,16 @@ async def starknet_factory():
             deploy_execution_info=module_registry_exec_info,
         )
 
-        alice_main = StarknetContract(
+        alice_main = ModularContract(
             state=state,
-            abi=smc_main_def.abi,
+            abi=module_registry_def.abi,
             contract_address=alice_main_addr,
             deploy_execution_info=alice_main_exec_info,
         )
 
-        bob_main = StarknetContract(
+        bob_main = ModularContract(
             state=state,
-            abi=smc_main_def.abi,
+            abi=module_registry_def.abi,
             contract_address=bob_main_addr,
             deploy_execution_info=bob_main_exec_info,
         )
@@ -76,7 +80,7 @@ async def starknet_factory():
             state=state,
             abi=module_introspection_def.abi,
             contract_address=module_introspection_addr,
-            deploy_execution_info=module_introspection_addr,
+            deploy_execution_info=module_introspection_exec_info,
         )
 
         return state, [alice_main, bob_main, module_registry, under_over, module_introspection]
@@ -96,34 +100,18 @@ async def test_it_works(starknet_factory: StarknetFactory):
             caller_address=ALICE,
         )
     
-    await _add_under_over_module(starknet, under_over, alice_main, caller=ALICE)
+    await alice_main.add_module(under_over).invoke(caller_address=ALICE)
 
-    exec_info = await starknet.invoke_raw(
-        contract_address=alice_main.contract_address,
-        selector='getReference',
-        calldata=[],
-        caller_address=ALICE,
-    )
+    exec_info = await alice_main.getReference().call(caller_address=ALICE)
 
     # reference number is initialized to 0 by default
-    assert exec_info.retdata == [0]
+    assert exec_info.result.reference == 0
 
     # update number
-    await starknet.invoke_raw(
-        contract_address=alice_main.contract_address,
-        selector='setReference',
-        calldata=[42],
-        caller_address=ALICE,
-    )
+    await alice_main.setReference(42).invoke(caller_address=ALICE)
 
-    exec_info = await starknet.invoke_raw(
-        contract_address=alice_main.contract_address,
-        selector='getReference',
-        calldata=[],
-        caller_address=ALICE,
-    )
-
-    assert exec_info.retdata == [42]
+    exec_info = await alice_main.getReference().call(caller_address=ALICE)
+    assert exec_info.result.reference == 42
 
     # double check bob's contract is untouched
     with pytest.raises(StarkException):
@@ -134,48 +122,25 @@ async def test_it_works(starknet_factory: StarknetFactory):
             caller_address=ALICE,
         )
 
-    await _add_under_over_module(starknet, under_over, bob_main, caller=BOB, initializer=True)
+    await bob_main.add_module(under_over, initializer_args=[100]).invoke(caller_address=BOB)
 
-    exec_info = await starknet.invoke_raw(
-        contract_address=bob_main.contract_address,
-        selector='getReference',
-        calldata=[],
-        caller_address=ALICE,
-    )
-
+    exec_info = await bob_main.getReference().call(caller_address=ALICE)
     # since we called the initializer, the reference number is initalized
     # to something else
-    assert exec_info.retdata == [100]
+    assert exec_info.result.reference == 100
 
     # update number
-    await starknet.invoke_raw(
-        contract_address=bob_main.contract_address,
-        selector='setReference',
-        calldata=[313],
-        caller_address=ALICE,
-    )
-
-    exec_info = await starknet.invoke_raw(
-        contract_address=bob_main.contract_address,
-        selector='getReference',
-        calldata=[],
-        caller_address=ALICE,
-    )
+    await bob_main.setReference(313).invoke(caller_address=BOB)
+    exec_info = await bob_main.getReference().call(caller_address=ALICE)
 
     # bob's reference number was updated
-    assert exec_info.retdata == [313]
+    assert exec_info.result.reference == 313
 
     # double check alice's contract was not touched
-    exec_info = await starknet.invoke_raw(
-        contract_address=alice_main.contract_address,
-        selector='getReference',
-        calldata=[],
-        caller_address=ALICE,
-    )
+    exec_info = await alice_main.getReference().call(caller_address=ALICE)
+    assert exec_info.result.reference == 42
 
-    assert exec_info.retdata == [42]
-
-    await _remove_under_over_module(starknet, under_over, bob_main, caller=BOB)
+    await bob_main.remove_module(under_over).invoke(caller_address=BOB)
 
     with pytest.raises(StarkException):
         await starknet.invoke_raw(
@@ -198,36 +163,16 @@ async def test_module_introspection(starknet_factory: StarknetFactory):
             caller_address=ALICE,
         )
 
-    await _add_module_introspection(starknet, module_introspection, alice_main, caller=ALICE)
+    await alice_main.add_module(module_introspection).invoke(caller_address=ALICE)
 
-    exec_info = await starknet.invoke_raw(
-        contract_address=alice_main.contract_address,
-        selector='moduleAddresses',
-        calldata=[],
-        caller_address=ALICE,
-    )
+    exec_info = await alice_main.moduleAddresses().call(caller_address=ALICE)
+    assert set(exec_info.result.module_addresses) == {module_registry.contract_address, module_introspection.contract_address}
 
-    assert exec_info.retdata[0] == 2
-    assert set(exec_info.retdata[1:]) == {module_registry.contract_address, module_introspection.contract_address}
+    exec_info = await alice_main.moduleFunctionSelectors(module_registry.contract_address).call(caller_address=ALICE)
+    assert exec_info.result.selectors == [get_selector_from_name('changeModules')]
 
-    exec_info = await starknet.invoke_raw(
-        contract_address=alice_main.contract_address,
-        selector='moduleFunctionSelectors',
-        calldata=[module_registry.contract_address],
-        caller_address=ALICE,
-    )
-
-    assert exec_info.retdata[0] == 1
-    assert exec_info.retdata[1:] == [get_selector_from_name('changeModules')]
-
-    exec_info = await starknet.invoke_raw(
-        contract_address=alice_main.contract_address,
-        selector='moduleAddress',
-        calldata=[get_selector_from_name('moduleAddresses')],
-        caller_address=ALICE,
-    )
-
-    assert exec_info.retdata == [module_introspection.contract_address]
+    exec_info = await alice_main.moduleAddress(get_selector_from_name('moduleAddresses')).call(caller_address=ALICE)
+    assert exec_info.result.module_address == module_introspection.contract_address
 
 
 @pytest.mark.asyncio
@@ -235,86 +180,7 @@ async def test_ownership(starknet_factory: StarknetFactory):
     starknet, [alice_main, _bob_main, _module_registry, under_over, _module_introspection] = starknet_factory()
     
     with pytest.raises(StarkException):
-        await _add_under_over_module(starknet, under_over, alice_main, caller=BOB)
+        await alice_main.add_module(under_over).invoke(caller_address=BOB)
 
-    await _add_under_over_module(starknet, under_over, alice_main, caller=ALICE)
-
-
-async def _add_under_over_module(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract, caller: Optional[int] = None, initializer: bool = False):
-    # add: action = 0
-    await _update_under_over_module(starknet, under_over, contract, 0, caller, initializer)
-
-
-async def _remove_under_over_module(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract, caller: Optional[int] = None):
-    # remove: action = 2
-    await _update_under_over_module(starknet, under_over, contract, 2, caller)
-
-
-async def _update_under_over_module(starknet: StarknetState, under_over: StarknetContract, contract: StarknetContract, action: int, caller: Optional[int] = None, initializer: bool = False):
-    # add/remove under over module from contract
-    #
-    # I'm not familiar with the api to convert from rich types down
-    # to felt so I'm doing this manually
-
-    if initializer:
-        initializer_args = [under_over.contract_address, 1, 100]
-    else:
-        initializer_args = [0, 0]
-    calldata = [
-        # Adding 3 functions
-        3,
-        # ModuleFunctionAction(address, action, selector)
-        under_over.contract_address,
-        action,
-        get_selector_from_name('setReference'),
-        under_over.contract_address,
-        action,
-        get_selector_from_name('getReference'),
-        under_over.contract_address,
-        action,
-        get_selector_from_name('underOver'),
-    ] + initializer_args
-
-    caller = 0 if caller is None else caller
-
-    exec_info = await starknet.invoke_raw(
-        contract_address=contract.contract_address,
-        selector='changeModules',
-        calldata=calldata,
-        caller_address=caller,
-    )
-
-    # the event being emitted is a good sign
-    assert len(exec_info.call_info.events) == 1
-
-
-async def _add_module_introspection(starknet: StarknetState, module_introspection: StarknetContract, contract: StarknetContract, caller: Optional[int] = None):
-    calldata = [
-        # Adding 3 functions
-        3,
-        # ModuleFunctionAction(address, action, selector)
-        module_introspection.contract_address,
-        0,
-        get_selector_from_name('moduleFunctionSelectors'),
-        module_introspection.contract_address,
-        0,
-        get_selector_from_name('moduleAddresses'),
-        module_introspection.contract_address,
-        0,
-        get_selector_from_name('moduleAddress'),
-        # no initialization call
-        0,
-        0,
-    ]
-
-    caller = 0 if caller is None else caller
-
-    exec_info = await starknet.invoke_raw(
-        contract_address=contract.contract_address,
-        selector='changeModules',
-        calldata=calldata,
-        caller_address=caller,
-    )
-
-    # the event being emitted is a good sign
-    assert len(exec_info.call_info.events) == 1
+    exec_info = await alice_main.add_module(under_over).invoke(caller_address=ALICE)
+    assert len(exec_info.raw_events) == 1

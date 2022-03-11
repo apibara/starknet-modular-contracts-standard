@@ -3,6 +3,8 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.math_cmp import is_le
 
+from openzeppelin.access.ownable import Ownable_only_owner
+
 @storage_var
 func _reference() -> (reference : felt):
 end
@@ -17,6 +19,7 @@ end
 @external
 func setReference{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
         reference : felt) -> ():
+    Ownable_only_owner()
     _reference.write(reference)
     return ()
 end

@@ -1,0 +1,1 @@
+from .modular_contract import ModularContract

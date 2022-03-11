@@ -4,7 +4,7 @@ from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.math import assert_not_zero
 
-from smc.modules.module_registry import (
+from smc.libraries.module_registry import (
     module_registry_get_module_address, _module_registry_selectors_len, _module_registry_selectors)
 
 # ---------------------------------------------------------------------------- #

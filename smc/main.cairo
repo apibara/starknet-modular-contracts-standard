@@ -8,7 +8,7 @@ from starkware.starknet.common.syscalls import delegate_call
 from openzeppelin.access.ownable import Ownable_initializer
 
 from smc.interfaces.module_registry import ModuleFunctionAction, MODULE_FUNCTION_ADD
-from smc.modules.module_registry import (
+from smc.libraries.module_registry import (
     module_registry_change_modules, module_registry_get_module_address,
     CHANGE_MODULES_SELECTOR)
 
